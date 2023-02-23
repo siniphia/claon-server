@@ -14,6 +14,8 @@ import coLaon.ClaonBack.user.domain.User;
 import coLaon.ClaonBack.user.domain.enums.OAuth2Provider;
 import coLaon.ClaonBack.user.dto.CenterClimbingHistoryResponseDto;
 import coLaon.ClaonBack.user.dto.DuplicatedCheckResponseDto;
+import coLaon.ClaonBack.user.dto.HistoryByDateFindResponseDto;
+import coLaon.ClaonBack.user.dto.HistoryGroupByMonthDto;
 import coLaon.ClaonBack.user.dto.IndividualUserResponseDto;
 import coLaon.ClaonBack.user.dto.InstagramResponseDto;
 import coLaon.ClaonBack.user.dto.OAuth2UserInfoDto;
@@ -25,6 +27,7 @@ import coLaon.ClaonBack.user.dto.UserModifyRequestDto;
 import coLaon.ClaonBack.user.dto.UserPostThumbnailResponseDto;
 import coLaon.ClaonBack.user.dto.UserPreviewResponseDto;
 import coLaon.ClaonBack.user.dto.UserResponseDto;
+import coLaon.ClaonBack.user.dto.UserCenterResponseDto;
 import coLaon.ClaonBack.user.infra.InstagramUserInfoProvider;
 import coLaon.ClaonBack.user.infra.ProfileImageManager;
 import coLaon.ClaonBack.user.repository.BlockUserRepository;
@@ -48,6 +51,7 @@ public class UserService {
     private final LaonRepository laonRepository;
     private final BlockUserRepository blockUserRepository;
     private final PostPort postPort;
+    private final CenterPort centerPort;
     private final OAuth2UserInfoProviderSupplier oAuth2UserInfoProviderSupplier;
     private final InstagramUserInfoProvider instagramUserInfoProvider;
     private final JwtUtil jwtUtil;
@@ -103,8 +107,8 @@ public class UserService {
 
         user.signUp(
                 signUpRequestDto.getNickname(),
-                signUpRequestDto.getHeight().orElse(0.0f),
-                signUpRequestDto.getArmReach().orElse(0.0f),
+                signUpRequestDto.getHeight() == null ? 0 : signUpRequestDto.getHeight(),
+                signUpRequestDto.getArmReach() == null ? 0 : signUpRequestDto.getArmReach(),
                 signUpRequestDto.getImagePath(),
                 signUpRequestDto.getInstagramOAuthId(),
                 signUpRequestDto.getInstagramUserName()
@@ -246,5 +250,93 @@ public class UserService {
         }
 
         this.profileImageManager.deleteProfile(user.getImagePath());
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistoryGroupByMonthDto> findHistoryByCenterIdAndUserId(
+            User user,
+            String nickname,
+            String centerId
+    ) {
+        User targetUser = userRepository.findByNickname(nickname).orElseThrow(
+                () -> new NotFoundException(
+                        ErrorCode.DATA_DOES_NOT_EXIST,
+                        String.format("%s을 찾을 수 없습니다.", nickname)
+                )
+        );
+
+        if (!user.getId().equals(targetUser.getId())) {
+            IsPrivateValidator.of(targetUser.getNickname(), targetUser.getIsPrivate()).validate();
+
+            if (!blockUserRepository.findBlock(targetUser.getId(), user.getId()).isEmpty()) {
+                throw new UnauthorizedException(
+                        ErrorCode.NOT_ACCESSIBLE,
+                        String.format("%s을 찾을 수 없습니다.", nickname)
+                );
+            }
+        }
+
+        if (!this.centerPort.existsByCenterId(centerId)) {
+            throw new NotFoundException(
+                    ErrorCode.DATA_DOES_NOT_EXIST,
+                    "암장을 찾을 수 없습니다."
+            );
+        }
+
+        return this.postPort.findByCenterIdAndUserId(centerId, targetUser.getId());
+    }
+
+    @Transactional(readOnly = true)
+    public Pagination<UserCenterResponseDto> findCenterHistory(
+            User user,
+            String nickname,
+            Pageable pageable
+    ) {
+        User targetUser = userRepository.findByNickname(nickname).orElseThrow(
+                () -> new NotFoundException(
+                        ErrorCode.DATA_DOES_NOT_EXIST,
+                        String.format("%s을 찾을 수 없습니다.", nickname)
+                )
+        );
+
+        // individual user page
+        if (!user.getId().equals(targetUser.getId())) {
+            IsPrivateValidator.of(targetUser.getNickname(), targetUser.getIsPrivate()).validate();
+
+            if (!blockUserRepository.findBlock(targetUser.getId(), user.getId()).isEmpty()) {
+                throw new UnauthorizedException(
+                        ErrorCode.NOT_ACCESSIBLE,
+                        String.format("%s을 찾을 수 없습니다.", nickname)
+                );
+            }
+        }
+
+        return paginationFactory.create(
+                this.postPort.selectDistinctCenterByUser(targetUser, pageable)
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<HistoryByDateFindResponseDto> findHistoryByDateAndUserId(User user, String nickname, Integer year, Integer month) {
+
+        User targetUser = userRepository.findByNickname(nickname).orElseThrow(
+                () -> new NotFoundException(
+                        ErrorCode.DATA_DOES_NOT_EXIST,
+                        String.format("%s을 찾을 수 없습니다", nickname)
+                )
+        );
+
+        if (!user.getId().equals(targetUser.getId())) {
+            IsPrivateValidator.of(targetUser.getNickname(), targetUser.getIsPrivate()).validate();
+
+            if (!blockUserRepository.findBlock(targetUser.getId(), user.getId()).isEmpty()) {
+                throw new UnauthorizedException(
+                        ErrorCode.NOT_ACCESSIBLE,
+                        String.format("%s을 찾을 수 없습니다.", nickname)
+                );
+            }
+        }
+
+        return this.postPort.findHistoryByDate(targetUser.getId(), year, month);
     }
 }

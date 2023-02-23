@@ -309,4 +309,29 @@ public class PostRepositoryTest {
         // then
         assertThat(countPost).isEqualTo(3);
     }
+
+    @Test
+    public void successFindByCenterIdAndUserId() {
+        // given
+        String centerId = center.getId();
+        String userId = user.getId();
+
+        // when
+        List<Post> results = postRepositorySupport.findByCenterIdAndUserId(centerId, userId);
+
+        // then
+        assertThat(results.size()).isEqualTo(1);
+    }
+
+    @Test
+    public void successFindCenterByUser() {
+        // given
+        String userId = user.getId();
+
+        // when
+        Page<Center> results = postRepositorySupport.findCenterByUser(userId, PageRequest.of(0, 2));
+
+        // then
+        assertThat(results.getContent().size()).isEqualTo(1);
+    }
 }

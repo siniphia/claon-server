@@ -2,9 +2,13 @@ plugins {
 	id 'org.springframework.boot' version '2.5.12'
 	id 'io.spring.dependency-management' version '1.0.11.RELEASE'
 	id 'java'
+	id 'jacoco'
 
 	// querydsl
 	id 'com.ewerk.gradle.plugins.querydsl' version '1.0.10'
+
+	// spring rest docs
+	id 'org.asciidoctor.jvm.convert' version '3.3.2'
 }
 
 group = 'co-Raon'
@@ -12,6 +16,7 @@ version = '0.0.1-SNAPSHOT'
 sourceCompatibility = '11'
 
 configurations {
+	asciidoctorExt
 	compileOnly {
 		extendsFrom annotationProcessor
 	}
@@ -19,6 +24,10 @@ configurations {
 
 repositories {
 	mavenCentral()
+}
+
+jacoco {
+	toolVersion = '0.8.8'
 }
 
 dependencies {
@@ -65,11 +74,16 @@ dependencies {
 	implementation 'com.github.downgoon:MarvinPlugins:1.5.5'
 	implementation 'org.springframework:spring-test'
 
+	// rest docs
+	asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
+	testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+
 	// test
 	implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
 	implementation 'org.mockito:mockito-junit-jupiter:4.6.1'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.mockito:mockito-inline:4.6.1'
+	testImplementation 'org.springframework.security:spring-security-test'
 }
 
 // querydsl
@@ -96,6 +110,111 @@ compileQuerydsl{
 	options.annotationProcessorPath = configurations.querydsl
 }
 
+// rest docs
+ext {
+	snippetsDir = file('build/generated-snippets')
+	buildDocsDir = file('build/docs/asciidoc')
+	restDocsDir = file('src/main/resources/static/docs')
+}
+
+asciidoctor {
+	inputs.dir snippetsDir
+	configurations 'asciidoctorExt'
+	dependsOn test
+}
+
+asciidoctor.doFirst {
+	delete restDocsDir
+}
+
+task copyRestDocs(type: Copy) {
+	dependsOn asciidoctor
+	from buildDocsDir
+	into restDocsDir
+}
+
+build {
+	dependsOn copyRestDocs
+}
+
+// test
 test {
 	useJUnitPlatform()
+	outputs.dir snippetsDir
+	finalizedBy jacocoTestReport
 }
+
+def jacocoExclude = [
+		// center
+		"**/center/domain/**",
+		"**/center/dto/**",
+		"**/center/web/**",
+		"**/center/service/*Adapter.*",
+		// common
+		"**/common/domain/**",
+		"**/common/exception/**",
+		"**/common/utgils/**",
+		"**/common/validator/**",
+		"**/common/**", // check
+		// config
+		"**/config/**", // check
+		// notice
+		"**/notice/domain/**",
+		"**/notice/dto/**",
+		"**/notice/web/**",
+		// post
+		"**/post/domain/**",
+		"**/post/dto/**",
+		"**/post/infra/**",
+		"**/post/web/**",
+		"**/post/service/*Adapter.*",
+
+		// user
+		"**/user/domain/**",
+		"**/user/dto/**",
+		"**/user/infra/**",
+		"**/user/web/**",
+		// version
+		"**/version/domain/**",
+		"**/version/dto/**",
+		"**/version/web/**",
+
+		// main
+		"**/ClaonBackApplication.java"
+]
+
+jacocoTestReport {
+	dependsOn test
+
+	reports {
+		html.enabled true
+		xml.enabled true
+		csv.enabled false
+		html.destination file("$buildDir/reports/jacoco")
+	}
+
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it, exclude: jacocoExclude)
+		}))
+	}
+}
+
+jacocoTestCoverageVerification {
+	afterEvaluate {
+		classDirectories.setFrom(files(classDirectories.files.collect {
+			fileTree(dir: it,
+					exclude: jacocoExclude
+			)
+		}))
+	}
+	violationRules {
+		rule {
+			excludes = jacocoExclude
+			limit {
+				minimum = 0.50
+			}
+		}
+	}
+}
+

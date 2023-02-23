@@ -12,9 +12,15 @@ import coLaon.ClaonBack.common.exception.ErrorCode;
 import coLaon.ClaonBack.common.exception.UnauthorizedException;
 import coLaon.ClaonBack.post.domain.ClimbingHistory;
 import coLaon.ClaonBack.post.domain.PostContents;
+import coLaon.ClaonBack.post.repository.ClimbingHistoryRepositorySupport;
+import coLaon.ClaonBack.user.domain.BlockUser;
 import coLaon.ClaonBack.user.domain.User;
 import coLaon.ClaonBack.post.domain.Post;
 import coLaon.ClaonBack.user.dto.CenterClimbingHistoryResponseDto;
+import coLaon.ClaonBack.user.dto.CenterInfoResponseDto;
+import coLaon.ClaonBack.user.dto.HistoryByCenterFindResponseDto;
+import coLaon.ClaonBack.user.dto.HistoryByDateFindResponseDto;
+import coLaon.ClaonBack.user.dto.HistoryGroupByMonthDto;
 import coLaon.ClaonBack.user.dto.UserCenterPreviewResponseDto;
 import coLaon.ClaonBack.user.dto.ClimbingHistoryResponseDto;
 import coLaon.ClaonBack.user.dto.HoldInfoResponseDto;
@@ -25,10 +31,12 @@ import coLaon.ClaonBack.user.dto.IndividualUserResponseDto;
 import coLaon.ClaonBack.user.dto.UserModifyRequestDto;
 import coLaon.ClaonBack.user.dto.UserPreviewResponseDto;
 import coLaon.ClaonBack.user.dto.UserResponseDto;
+import coLaon.ClaonBack.user.dto.UserCenterResponseDto;
 import coLaon.ClaonBack.user.repository.BlockUserRepository;
 import coLaon.ClaonBack.user.repository.LaonRepository;
 import coLaon.ClaonBack.user.repository.UserRepository;
 import coLaon.ClaonBack.user.repository.UserRepositorySupport;
+import coLaon.ClaonBack.user.service.CenterPort;
 import coLaon.ClaonBack.user.service.PostPort;
 import coLaon.ClaonBack.user.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
@@ -46,6 +54,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -66,17 +75,23 @@ public class UserServiceTest {
     @Mock
     BlockUserRepository blockUserRepository;
     @Mock
+    ClimbingHistoryRepositorySupport climbingHistoryRepositorySupport;
+    @Mock
     PostPort postPort;
+    @Mock
+    CenterPort centerPort;
     @Spy
     PaginationFactory paginationFactory = new PaginationFactory();
 
     @InjectMocks
     UserService userService;
 
-    private User user, privateUser, publicUser;
+    private User user, user2, user3, privateUser, publicUser;
+    private BlockUser blockUser;
     private Center center;
-    private ClimbingHistory climbingHistory;
+    private ClimbingHistory climbingHistory, climbingHistory2, climbingHistory3, climbingHistory4;
     private List<String> postIds;
+    private Post post, post2, post3, post4, post5;
 
     @BeforeEach
     void setUp() {
@@ -117,6 +132,36 @@ public class UserServiceTest {
         );
         ReflectionTestUtils.setField(this.user, "id", "userId");
 
+        this.user2 = User.of(
+                "test2@gmail.com",
+                "1234567890",
+                "test2",
+                180.0F,
+                180.0F,
+                "",
+                "",
+                "instagramId2"
+        );
+        ReflectionTestUtils.setField(this.user2, "id", "userId2");
+
+        this.user3 = User.of(
+                "test3@gmail.com",
+                "12341111",
+                "test3",
+                190.0F,
+                190.0F,
+                "",
+                "",
+                "instagramId3"
+        );
+        ReflectionTestUtils.setField(this.user3, "id", "userId3");
+
+        this.blockUser = BlockUser.of(
+                user,
+                user2
+        );
+        ReflectionTestUtils.setField(this.blockUser, "id", "block1");
+
         this.center = Center.of(
                 "test",
                 "test",
@@ -130,6 +175,13 @@ public class UserServiceTest {
                 List.of(new Charge(List.of(new ChargeElement("자유 패키지", "330,000")), "charge image")),
                 "hold info img test"
         );
+        ReflectionTestUtils.setField(center, "id", "centerId");
+
+        HoldInfo holdInfo = HoldInfo.of("test hold", "hold img test", this.center);
+        ReflectionTestUtils.setField(holdInfo, "id", "holdId1");
+
+        HoldInfo holdInfo2 = HoldInfo.of("test hold2", "hold img test2", this.center);
+        ReflectionTestUtils.setField(holdInfo2, "id", "holdId2");
 
         Post post = Post.of(
                 center,
@@ -143,14 +195,87 @@ public class UserServiceTest {
         ReflectionTestUtils.setField(post, "createdAt", LocalDateTime.now());
         ReflectionTestUtils.setField(post, "updatedAt", LocalDateTime.now());
 
+        this.post = post;
         this.postIds = List.of(post.getId());
-        HoldInfo holdInfo = HoldInfo.of("name", "dfdf", center);
-        ReflectionTestUtils.setField(holdInfo, "id", "test");
+
         this.climbingHistory = ClimbingHistory.of(
-                post,
+                post2,
                 holdInfo,
                 2
         );
+
+        this.climbingHistory2 = ClimbingHistory.of(
+                post3,
+                holdInfo2,
+                1
+        );
+        ReflectionTestUtils.setField(climbingHistory2, "id", "climbingId2");
+
+        this.climbingHistory3 = ClimbingHistory.of(
+                post4,
+                holdInfo,
+                2
+        );
+        ReflectionTestUtils.setField(climbingHistory2, "id", "climbingId3");
+
+        this.climbingHistory4 = ClimbingHistory.of(
+                post5,
+                holdInfo2,
+                5
+        );
+        ReflectionTestUtils.setField(climbingHistory2, "id", "climbingId4");
+
+        this.post2 = Post.of(
+                center,
+                "testContent1",
+                user2,
+                List.of(PostContents.of(
+                        "test.com/test.png"
+                )),
+                List.of(climbingHistory)
+        );
+        ReflectionTestUtils.setField(post2, "id", "testPostId2");
+        ReflectionTestUtils.setField(post2, "createdAt", LocalDateTime.now());
+        ReflectionTestUtils.setField(post2, "updatedAt", LocalDateTime.now());
+
+        this.post3 = Post.of(
+                center,
+                "testContent2",
+                user,
+                List.of(PostContents.of(
+                        "test2.com/test.png"
+                )),
+                List.of(climbingHistory2)
+        );
+        ReflectionTestUtils.setField(post3, "id", "testPostId3");
+        ReflectionTestUtils.setField(post3, "createdAt", LocalDateTime.now());
+        ReflectionTestUtils.setField(post3, "updatedAt", LocalDateTime.now());
+
+        this.post4 = Post.of(
+                center,
+                "testContent2",
+                user,
+                List.of(PostContents.of(
+                        "test2.com/test.png"
+                )),
+                List.of(climbingHistory)
+        );
+        ReflectionTestUtils.setField(post4, "id", "testPostId4");
+        ReflectionTestUtils.setField(post4, "createdAt", LocalDateTime.now());
+        ReflectionTestUtils.setField(post4, "updatedAt", LocalDateTime.now());
+
+        this.post5 = Post.of(
+                center,
+                "testContent5",
+                user3,
+                List.of(PostContents.of(
+                        "test5.com/test.png"
+                )),
+                List.of(climbingHistory4)
+        );
+        ReflectionTestUtils.setField(post5, "id", "testPostId5");
+        ReflectionTestUtils.setField(post5, "createdAt", LocalDateTime.now());
+        ReflectionTestUtils.setField(post5, "updatedAt", LocalDateTime.now());
     }
 
     @Test
@@ -408,5 +533,140 @@ public class UserServiceTest {
         this.userService.delete(this.user);
 
         // then
+    }
+
+    @Test
+    @DisplayName("Success case for find history using center and user")
+    void successFindByCenterIdAndUserId() {
+        // given
+        given(this.userRepository.findByNickname(this.user3.getNickname())).willReturn(Optional.of(this.user3));
+        given(this.centerPort.existsByCenterId(this.center.getId())).willReturn(true);
+
+        ClimbingHistoryResponseDto climbingHistoryResponseDto3 = ClimbingHistoryResponseDto.from(
+                HoldInfoResponseDto.of(
+                        climbingHistory4.getHoldInfo().getId(),
+                        climbingHistory4.getHoldInfo().getName(),
+                        climbingHistory4.getHoldInfo().getImg(),
+                        climbingHistory4.getHoldInfo().getCrayonImageUrl()
+                ),
+                climbingHistory4.getClimbingCount()
+        );
+
+        List<HistoryByCenterFindResponseDto> histories = List.of(
+                HistoryByCenterFindResponseDto.from(
+                        post5.getId(),
+                        post5.getCreatedAt(),
+                        List.of(climbingHistoryResponseDto3))
+        );
+
+        List<HistoryGroupByMonthDto> historyGroup = List.of(HistoryGroupByMonthDto.from(post3.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy.MM")), histories));
+
+        given(this.postPort.findByCenterIdAndUserId(center.getId(), user3.getId())).willReturn(historyGroup);
+
+        // when
+        List<HistoryGroupByMonthDto> results = this.userService.findHistoryByCenterIdAndUserId(user, user3.getNickname(), center.getId());
+
+        // then
+        assertThat(results.get(0))
+                .isNotNull()
+                .extracting("date", "histories")
+                .contains(historyGroup.get(0).getDate(), historyGroup.get(0).getHistories());
+    }
+
+    @Test
+    @DisplayName("failure case for find history using center and user because of block relation")
+    void failureFindByCenterIdAndUserId_forPrivateUser() {
+        // given
+        given(this.userRepository.findByNickname(this.privateUser.getNickname())).willReturn(Optional.of(this.privateUser));
+
+        // when
+        final UnauthorizedException ex = assertThrows(
+                UnauthorizedException.class,
+                () -> this.userService.findHistoryByCenterIdAndUserId(user, this.privateUser.getNickname(), this.center.getId())
+        );
+
+        // then
+        assertThat(ex)
+                .extracting("errorCode", "message")
+                .contains(ErrorCode.NOT_ACCESSIBLE, String.format("%s은 비공개 상태입니다.", privateUser.getNickname()));
+    }
+
+    @Test
+    @DisplayName("Success case for finding center history by user nickname")
+    void successFindCenterHistory() {
+        // given
+        Pageable pageable = PageRequest.of(0, 2);
+        Page<UserCenterResponseDto> postPagination = new PageImpl<>(
+                List.of(UserCenterResponseDto.from(
+                        center.getId(),
+                        center.getThumbnailUrl(),
+                        center.getName()
+                )), pageable, 1);
+
+        given(this.userRepository.findByNickname(this.user.getNickname())).willReturn(Optional.of(this.user));
+        given(this.postPort.selectDistinctCenterByUser(this.user, pageable)).willReturn(postPagination);
+
+        // when
+        Pagination<UserCenterResponseDto> postHistory = this.userService.findCenterHistory(this.user, this.user.getNickname(), pageable);
+        // then
+        assertThat(postHistory.getResults().size()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Success case for find history using year, month")
+    void successFindHistoryByDate() {
+        // given
+        CenterInfoResponseDto centerInfo = CenterInfoResponseDto.from(
+                center.getId(),
+                center.getName(),
+                center.getThumbnailUrl()
+        );
+
+        List<ClimbingHistoryResponseDto> histories = List.of(
+                ClimbingHistoryResponseDto.from(
+                        HoldInfoResponseDto.of(
+                                climbingHistory4.getHoldInfo().getId(),
+                                climbingHistory4.getHoldInfo().getName(),
+                                climbingHistory4.getHoldInfo().getImg(),
+                                climbingHistory4.getHoldInfo().getCrayonImageUrl()
+                        ),
+                        climbingHistory4.getClimbingCount()
+                )
+        );
+
+        HistoryByDateFindResponseDto historyDto = HistoryByDateFindResponseDto.from(
+                centerInfo, histories
+        );
+
+        given(this.userRepository.findByNickname(this.user3.getNickname())).willReturn(Optional.of(this.user3));
+        given(this.postPort.findHistoryByDate(user3.getId(), LocalDateTime.now().getYear(), LocalDateTime.now().getMonthValue())).willReturn(List.of(historyDto));
+
+        // when
+        List<HistoryByDateFindResponseDto> results = this.userService.findHistoryByDateAndUserId(user, user3.getNickname(), LocalDateTime.now().getYear(), LocalDateTime.now().getMonthValue());
+
+        // then
+        assertThat(results.get(0))
+                .isNotNull()
+                .extracting(HistoryByDateFindResponseDto::getCenterInfo, HistoryByDateFindResponseDto::getHistories)
+                .contains(centerInfo, histories);
+    }
+
+    @Test
+    @DisplayName("failure case for find history using center and user because of block relation")
+    void failureFindHistoryByDate_forBlockUser() {
+        // given
+        given(this.userRepository.findByNickname(this.user2.getNickname())).willReturn(Optional.of(this.user2));
+        given(this.blockUserRepository.findBlock(this.user2.getId(), this.user.getId())).willReturn(List.of(this.blockUser));
+
+        // when
+        final UnauthorizedException ex = assertThrows(
+                UnauthorizedException.class,
+                () -> this.userService.findHistoryByCenterIdAndUserId(user, this.user2.getNickname(), this.center.getId())
+        );
+
+        // then
+        assertThat(ex)
+                .extracting("errorCode", "message")
+                .contains(ErrorCode.NOT_ACCESSIBLE, String.format("%s을 찾을 수 없습니다.", user2.getNickname()));
     }
 }
