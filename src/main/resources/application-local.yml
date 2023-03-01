@@ -3,7 +3,7 @@ server:
 
 spring:
   config:
-    import: classpath:auth-config.yml, classpath:aws-config.yml
+    import: classpath:auth-config.yml, classpath:aws-config.yml, resilience-config.yml
 
   datasource:
     driver-class-name: org.postgresql.Driver

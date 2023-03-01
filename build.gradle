@@ -78,6 +78,12 @@ dependencies {
 	asciidoctorExt 'org.springframework.restdocs:spring-restdocs-asciidoctor'
 	testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
 
+	// resilience4j
+	implementation 'io.github.resilience4j:resilience4j-all:1.7.0'
+	implementation 'io.github.resilience4j:resilience4j-annotations:1.7.0'
+	implementation 'io.github.resilience4j:resilience4j-spring-boot2'
+	implementation 'org.springframework.boot:spring-boot-starter-aop'
+
 	// test
 	implementation 'org.junit.jupiter:junit-jupiter:5.8.2'
 	implementation 'org.mockito:mockito-junit-jupiter:4.6.1'

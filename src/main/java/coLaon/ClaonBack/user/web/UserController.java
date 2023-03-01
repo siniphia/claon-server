@@ -16,6 +16,7 @@ import coLaon.ClaonBack.user.dto.UserResponseDto;
 import coLaon.ClaonBack.user.dto.UserCenterResponseDto;
 import coLaon.ClaonBack.user.service.BlockUserService;
 import coLaon.ClaonBack.user.service.UserService;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -38,7 +39,6 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletRequest;
 import javax.validation.Valid;
 import java.util.List;
-
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/users")
@@ -146,10 +146,17 @@ public class UserController {
 
     @PostMapping("/me/profile")
     @ResponseStatus(value = HttpStatus.OK)
+    @CircuitBreaker(name = "upload-profile", fallbackMethod = "tooManyRequests")
     public String uploadProfile(
             @RequestPart MultipartFile image
     ) {
         return this.userService.uploadProfile(image);
+    }
+
+    @GetMapping("too-many-requests")
+    @ResponseStatus(value = HttpStatus.OK)
+    public String tooManyRequests() {
+        return "Please wait for a minute and retry.";
     }
 
     @DeleteMapping("/me/profile")
